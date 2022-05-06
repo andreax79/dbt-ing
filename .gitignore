@@ -1,0 +1,16 @@
+target/
+dbt_modules/
+logs/
+/bin
+/lib
+/share
+/pyvenv.cfg
+/config.key
+/__pycache__
+/dbt_packages
+/include
+__pycache__
+.eggs/
+.mypy_cache
+*.egg
+*.egg-info

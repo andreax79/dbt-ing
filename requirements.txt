@@ -1,0 +1,6 @@
+openpyxl
+cryptography==3.3.*
+dbt-core==1.0.*
+sharepointcli
+click
+gluettalax

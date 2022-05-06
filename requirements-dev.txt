@@ -1,0 +1,9 @@
+black
+pre-commit
+git+https://github.com/Tomme/dbt-athena.git
+coverage
+flake8
+mypy
+sphinx
+tox
+twine<3.4

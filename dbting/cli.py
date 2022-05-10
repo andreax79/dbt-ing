@@ -195,6 +195,7 @@ def get_flow_xlsx(sharepoint_url: str, flow: str, download: bool) -> str:
 @click.option("--download/--no-download", default=True)
 @click.option("--field_delimiter", default="|")
 @click.option("--table", "-t", "include_target_tables", multiple=True, help="Tables to be created/repaired")
+@click.option("--dry-run", is_flag=True, help="Perform a dry run", default=False)
 @click.pass_context
 def ingest(
     ctx,
@@ -204,6 +205,7 @@ def ingest(
     download,
     field_delimiter,
     include_target_tables,
+    dry_run,
 ):
     "Parse flow mapping and generate source models"
     flow = flow.lower()
@@ -233,10 +235,16 @@ def ingest(
         if True:  # Athena TODO
             click.echo("{flow} - Create external tables".format(flow=flow))
             drop_external_tables(
-                flow=flow, athena_location=config["S3__ATHENA_LOCATION"], include_target_tables=include_target_tables
+                flow=flow,
+                athena_location=config["S3__ATHENA_LOCATION"],
+                include_target_tables=include_target_tables,
+                dry_run=dry_run,
             )
             create_external_tables(
-                flow=flow, athena_location=config["S3__ATHENA_LOCATION"], include_target_tables=include_target_tables
+                flow=flow,
+                athena_location=config["S3__ATHENA_LOCATION"],
+                include_target_tables=include_target_tables,
+                dry_run=dry_run,
             )
         else:
             # Check tables argument
@@ -250,16 +258,17 @@ def ingest(
                     source_node_names.append("{batch_profile}__{source_table}".format(**table))
                     source_node_names.append("{datalake_profile}__{target_table}".format(**table))
                 args["source_node_names"] = source_node_names
-            run(
-                [
-                    "dbt",
-                    "--partial-parse",
-                    "run-operation",
-                    "create_external_tables",
-                    "--args",
-                    json.dumps(args),
-                ]
-            )
+            if not dry_run:
+                run(
+                    [
+                        "dbt",
+                        "--partial-parse",
+                        "run-operation",
+                        "create_external_tables",
+                        "--args",
+                        json.dumps(args),
+                    ]
+                )
         if repair_tables:
             # Repair external tables
             click.echo("{flow} - Repair external tables".format(flow=flow))
@@ -267,6 +276,7 @@ def ingest(
                 flow=flow,
                 athena_location=config["S3__ATHENA_LOCATION"],
                 include_target_tables=include_target_tables,
+                dry_run=dry_run,
             )
 
 

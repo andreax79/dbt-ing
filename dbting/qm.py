@@ -15,10 +15,16 @@ class TooManyRequestsException(Exception):
     pass
 
 
+class DryRunException(Exception):
+    pass
+
+
 class QueryManager:
-    def __init__(self, athena_location, client=None):
+    def __init__(self, athena_location, client=None, dry_run=False):
         self.config = {"OutputLocation": athena_location}
-        if client:
+        if dry_run:
+            self.client = None
+        elif client:
             self.client = client
         elif "AWS_REGION" in os.environ:
             self.client = boto3.client("athena", os.environ["AWS_REGION"])
@@ -29,6 +35,8 @@ class QueryManager:
     def start_query_execution(self, sql, context):
         try:
             click.echo(sql)
+            if self.client is None:
+                raise DryRunException
             r = self.client.start_query_execution(
                 QueryString=sql, QueryExecutionContext=context, ResultConfiguration=self.config
             )
@@ -40,6 +48,7 @@ class QueryManager:
                 raise ex
 
     def execute_query(self, sql, context, sleep_seconds=1):
+        "Execute an SQL statement on Athena"
         try:
             self.execution_ids.add(self.start_query_execution(sql, context))
             time.sleep(sleep_seconds)
@@ -47,14 +56,19 @@ class QueryManager:
             self.wait_executions()
             time.sleep(sleep_seconds)
             self.execution_ids.add(self.start_query_execution(sql, context))
+        except DryRunException:
+            pass
 
     def execute_template(self, template, context, data):
+        "Render an execute an SQL template on Athena"
         template_str = resource_string("dbting.templates", template).decode("utf-8")
         sql = Template(template_str).render(**data)
         return self.execute_query(sql, context)
 
     def wait_executions(self, sleep_seconds=5):
         errors = []
+        if self.client is None:
+            return errors
         while self.execution_ids:
             time.sleep(sleep_seconds)
             for execution_id in list(self.execution_ids):

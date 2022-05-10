@@ -34,7 +34,7 @@ setup(
     install_requires=[line.rstrip() for line in open(os.path.join(os.path.dirname(__file__), "requirements.txt"))],
     entry_points={
         "console_scripts": [
-            "dbting=dbting.cli:main",
+            "dbting=dbting.cli:cli",
         ],
     },
     test_suite="tests",

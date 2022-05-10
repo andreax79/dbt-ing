@@ -61,7 +61,7 @@ class QueryManager:
                 r = self.client.get_query_execution(QueryExecutionId=execution_id)
                 state = r["QueryExecution"]["Status"]["State"]
                 if state in ["QUEUED", "RUNNING"]:
-                    click.echo(state, r["QueryExecution"]["Query"])
+                    click.echo("{} {}".format(state, r["QueryExecution"]["Query"]))
                 else:
                     if state == "FAILED":
                         error = r["QueryExecution"]["Status"]["StateChangeReason"]

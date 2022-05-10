@@ -1,0 +1,9 @@
+include README.md requirements.txt requirements-dev.txt dbting/VERSION
+recursive-include dbting/templates *
+recursive-exclude * __pycache__
+recursive-exclude * *.pyc
+recursive-exclude * *.pyo
+recursive-exclude * *.orig
+recursive-exclude tests *
+recursive-exclude test_virtualenv *
+prune test*

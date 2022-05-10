@@ -3,6 +3,8 @@ dbt_modules/
 logs/
 /bin
 /lib
+/build
+/dist
 /share
 /pyvenv.cfg
 /config.key

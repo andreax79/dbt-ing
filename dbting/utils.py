@@ -7,8 +7,9 @@ import sys
 import click
 import yaml
 import subprocess
-from cryptography.fernet import Fernet
-from jinja2 import Template
+from cryptography.fernet import Fernet  # type: ignore
+from jinja2 import Template  # type: ignore
+from typing import Any, Dict, List, Optional, Union
 
 __all__ = [
     "decrypt_config_passwords",
@@ -17,6 +18,12 @@ __all__ = [
     "run",
     "to_bool",
     "write_config_file",
+    "AthenaContext",
+    "Config",
+    "Table",
+    "Tables",
+    "TargetTables",
+    "Partitions",
     "DEFAULT_DATETIME_FORMAT",
     "DEFAULT_DATE_FORMAT",
     "DEFAULT_PARTITIONS",
@@ -57,11 +64,19 @@ VERSION_FILE = os.path.join(os.path.dirname(__file__), "VERSION")
 with open(VERSION_FILE) as f:
     VERSION = f.read().strip()
 
+# Typing
+AthenaContext = Dict[str, str]
+Config = Dict[str, Any]
+Table = Dict[str, Any]
+Tables = Dict[str, Table]
+TargetTables = Optional[List[str]]
+Partitions = Dict[str, str]
 
-def to_bool(value) -> bool:
+
+def to_bool(value: Any) -> bool:
     "Convert a string to a bool value"
     if not value:
-        return None
+        return False
     if isinstance(value, str):
         value = value.lower()
     try:
@@ -70,7 +85,7 @@ def to_bool(value) -> bool:
         return False
 
 
-def load_mapping(flow: str, include_target_tables=None) -> None:
+def load_mapping(flow: str, include_target_tables: TargetTables = None) -> Tables:
     "Return mapping configuration for a given flow"
     ingestion_mapping_path = os.path.join("flows", "{flow}.cfg.json".format(flow=flow))
     with open(ingestion_mapping_path, "r") as f:
@@ -78,7 +93,7 @@ def load_mapping(flow: str, include_target_tables=None) -> None:
     return filter_tables(mapping, include_target_tables)
 
 
-def filter_tables(mapping, include_target_tables=None):
+def filter_tables(mapping: Tables, include_target_tables: TargetTables = None) -> Tables:
     if not include_target_tables:
         return mapping
     result = {}
@@ -91,7 +106,7 @@ def filter_tables(mapping, include_target_tables=None):
     return result
 
 
-def run(command, debug=False) -> None:
+def run(command: Union[str, List[str]], debug: bool = False) -> None:
     "Execute a command and exit if the command fails"
     if isinstance(command, str):
         if debug:
@@ -105,10 +120,10 @@ def run(command, debug=False) -> None:
             sys.exit(1)
 
 
-def load_config():
+def load_config() -> Config:
     "Load the configuration"
     config = dict(DEFAULT_CONFIG)
-    with open(config["CONFIG"], "r") as f:
+    with open(config["CONFIG"], "r") as f:  # type: ignore
         config.update(yaml.safe_load(f))
     # Convert the keys to uppercase
     t = dict((k.upper(), v) for k, v in config.items())
@@ -121,7 +136,7 @@ def load_config():
     return result
 
 
-def decrypt_config_passwords(config) -> None:
+def decrypt_config_passwords(config: Config) -> None:
     "Decrypt the encrypted passwords (ending with _ENC)"
     if not config.get("S3__KEY_LOCATION"):
         return
@@ -139,7 +154,7 @@ def decrypt_config_passwords(config) -> None:
     # click.secho(key.encrypt(bytes('key', 'ascii')).decode('ascii'))
 
 
-def write_config_file(config, filename: str) -> None:
+def write_config_file(config: Config, filename: str) -> None:
     "Render a config template"
     basename = os.path.basename(filename)
     with open(os.path.join("config", basename + ".tmpl")) as f:

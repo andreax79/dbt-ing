@@ -3,14 +3,18 @@
 import re
 import os
 import os.path
-import sys
 import json
 import yaml
 import click
 import shutil
-from openpyxl import load_workbook
+from typing import Any, Dict, List, Optional
+from openpyxl import load_workbook  # type: ignore
+from openpyxl.workbook import Workbook  # type: ignore
 from .utils import (
     to_bool,
+    Config,
+    Table,
+    Tables,
     DEFAULT_PARTITIONS,
     DEFAULT_FIELD_DELIMITER,
     DEFAULT_SOURCE_FORMAT,
@@ -22,7 +26,7 @@ __all__ = [
 ]
 
 
-def represent_ordereddict(dumper, data):
+def represent_ordereddict(dumper, data):  # type: ignore
     value = []
     for item_key, item_value in data.items():
         node_key = dumper.represent_data(item_key)
@@ -39,7 +43,7 @@ class quoted(str):
 
 
 # define a custom representer for strings
-def quoted_presenter(dumper, data):
+def quoted_presenter(dumper, data):  # type: ignore
     return dumper.represent_scalar("tag:yaml.org,2002:str", data, style='"')
 
 
@@ -76,26 +80,26 @@ class Empty(Exception):
     pass
 
 
-def parse_row_config(table_def, columns, row):
+def parse_row_config(table_def: Dict[str, Any], columns: List[Dict[str, Any]], row: List[Any]) -> None:
     try:
         table_def[row[0].strip().lower()] = row[1].strip() if row[1] else ""
     except Exception as ex:
         raise MappingException("Error parsing row {}: {}".format(row, ex))
 
 
-def parse_row_where(table_def, columns, row):
+def parse_row_where(table_def: Dict[str, Any], columns: List[Dict[str, Any]], row: List[Any]) -> None:
     where_condition = (row[0] or "").strip()
     if where_condition:
         table_def["where_condition"] = where_condition
 
 
-def parse_row_select_header(table_def, columns, row):
+def parse_row_select_header(table_def: Dict[str, Any], columns: List[Dict[str, Any]], row: List[Any]) -> None:
     table_def["header"] = dict((h.lower(), i) for i, h in enumerate(row) if h is not None)
     table_def["parse_row"] = parse_row_select
 
 
-def parse_row_select(table_def, columns, row):
-    item = {}
+def parse_row_select(table_def: Dict[str, Any], columns: List[Dict[str, Any]], row: List[Any]) -> None:
+    item: Dict[str, Any] = {}
     for h, i in table_def["header"].items():
         try:
             value = row[i]
@@ -108,7 +112,7 @@ def parse_row_select(table_def, columns, row):
 
 
 def parse_xlsx_legacy(
-    ws,
+    ws: Workbook,
     flow: str,
     batch_profile: str,
     datalake_profile: str,
@@ -117,10 +121,10 @@ def parse_xlsx_legacy(
     source_schema: str,
     target_schema: str,
     field_delimiter: str,
-):
+) -> Tables:
     flow = flow.lower()
-    header = None
-    rows = []
+    header: Optional[Dict[str, Any]] = None
+    rows: List[Any] = []
     for row in ws.values:
         if header is None:
             header = dict((h.lower(), i) for i, h in enumerate(row))
@@ -136,7 +140,7 @@ def parse_xlsx_legacy(
                 item[h] = value
             rows.append(item)
 
-    tables = {}
+    tables: Tables = {}
     for row_number, item in enumerate(rows, start=1):
         if not item.get("file_name"):
             continue
@@ -161,9 +165,9 @@ def parse_xlsx_legacy(
 
 
 def parse_worsheet(
-    ws,
+    ws: Workbook,
     flow: str,
-    tables,
+    tables: Tables,
     batch_profile: str,
     datalake_profile: str,
     batch_location: str,
@@ -171,13 +175,13 @@ def parse_worsheet(
     source_schema: str,
     target_schema: str,
     field_delimiter: str,
-):
+) -> None:
     flow = flow.lower()
-    columns = []
+    columns: List[Dict[str, Any]] = []
     if ws["A1"].value != "TYPE":
         click.secho("- skip worksheet {}".format(ws.title))
         return
-    table_def = {
+    table_def: Dict[str, Any] = {
         "parse_row": None,
         "type": ws["A2"].value,
         "flow": flow,
@@ -215,18 +219,19 @@ def parse_worsheet(
 def parse_xlsx(
     filename: str,
     flow: str,
-    batch_profile: str,
-    datalake_profile: str,
-    batch_location: str,
-    datalake_location: str,
-    source_schema: str,
-    target_schema: str,
+    config: Config,
     field_delimiter: str = DEFAULT_FIELD_DELIMITER,
     worksheet: int = 0,
-):
+) -> Tables:
     # Read xlsx
     flow = flow.lower()
-    wb = load_workbook(filename, read_only=True)
+    batch_profile = config["DBT__BATCH_PROFILE"]
+    datalake_profile = config["DBT__DATALAKE_PROFILE"]
+    batch_location = config["S3__BATCH_LOCATION"]
+    datalake_location = config["S3__DATALAKE_LOCATION"]
+    source_schema = config["DB__SOURCE_SCHEMA"]
+    target_schema = config["DB__TARGET_SCHEMA"]
+    wb: Workbook = load_workbook(filename, read_only=True)
     try:
         ws = wb.worksheets[worksheet]
         if ws["A1"].value != "TYPE":  # legacy
@@ -242,7 +247,7 @@ def parse_xlsx(
                 field_delimiter=field_delimiter,
             )
         else:
-            tables = {}
+            tables: Tables = {}
             for ws in wb.worksheets:
                 parse_worsheet(
                     ws=ws,
@@ -262,7 +267,7 @@ def parse_xlsx(
         wb.close()
 
 
-def parse_rows(tables, flow):
+def parse_rows(tables: Tables, flow: str) -> Tables:
     flow = flow.lower()
     data = []
     for target_table, table_def in list(tables.items()):
@@ -278,14 +283,14 @@ def parse_rows(tables, flow):
                 if not item.get("file_name"):
                     raise Empty
                 st = target_table
-                col = {}
-                source_format = table_def.get("source_format")
+                col: Dict[str, Any] = {}
+                source_format: str = table_def.get("source_format")  # type: ignore
                 col["flow"] = flow
                 col["source_schema"] = table_def["source_schema"]
                 col["filename"] = item["file_name"]
                 try:
                     col["source_table"] = filename_to_source_table(col["filename"], flow)
-                except:
+                except Exception:
                     raise MappingException("#{} invalid filename {}".format(row_number, item["filename"]))
                 col["source_location"] = table_def.get("source_location") or (
                     os.path.join(
@@ -378,7 +383,7 @@ def parse_rows(tables, flow):
                 partitions = []
             elif isinstance(partitions, str):
                 partitions = [x.strip() for x in table_def["partitions"].split(",")]
-        except:
+        except Exception:
             partitions = DEFAULT_PARTITIONS
         table_def["partitions"] = partitions
         for k in partitions:
@@ -416,7 +421,14 @@ def parse_rows(tables, flow):
     return tables
 
 
-def generate_column(column, kind, table_def, forced_type=None, has_compound_key=False, table_format=None):
+def generate_column(
+    column: Dict[str, Any],
+    kind: str,
+    table_def: Table,
+    forced_type: Optional[str] = None,
+    has_compound_key: bool = False,
+    table_format: Optional[str] = None,
+) -> Dict[str, Any]:
     if kind == "batch" and not column.get("meta", {}).get("partition") and not table_format == "json":
         forced_type = "varchar(65535)" if not column.get("meta", {}).get("partition") else None
     result = {
@@ -456,7 +468,7 @@ def generate_column(column, kind, table_def, forced_type=None, has_compound_key=
     return result
 
 
-def generate_sources(tables, kind, flow):
+def generate_sources(tables: Tables, kind: str, flow: str) -> None:
     sources_path = "./models/sources/{kind}/{flow}".format(kind=kind, flow=flow)
     shutil.rmtree(sources_path, ignore_errors=True)
     os.makedirs(sources_path, exist_ok=True)
@@ -464,6 +476,7 @@ def generate_sources(tables, kind, flow):
     for table_def in tables.values():
         if kind == "batch":
             name = table_def["batch_profile"] + "__" + table_def["source_table"]
+            description = table_def.get("description") or "{flow} - {name}".format(flow=flow, name=name)
             source_format = table_def.get("source_format") or DEFAULT_SOURCE_FORMAT
             table_properties = {
                 "CrawlerSchemaDeserializerVersion": "1.0",
@@ -486,8 +499,7 @@ def generate_sources(tables, kind, flow):
                         "tables": [
                             {
                                 "name": name,
-                                "description": table_def.get("description")
-                                or "{flow} - {name}".format(flow=flow, name=name),
+                                "description": description,
                                 "identifier": table_def["source_table"],
                                 "meta": {
                                     "flow": table_def["flow"],
@@ -528,7 +540,7 @@ def generate_sources(tables, kind, flow):
                         }
                     }
                 ]
-            tags = table_def.get("tags").split() if table_def.get("tags") else None
+            tags = table_def.get("tags").split() if table_def.get("tags") else None  # type: ignore
             doc = {
                 "version": 2,
                 "sources": [
@@ -565,13 +577,13 @@ def generate_sources(tables, kind, flow):
                 ],
             }
             for k in ["tests", "tags"]:
-                if not doc["sources"][0]["tables"][0][k]:
-                    del doc["sources"][0]["tables"][0][k]
+                if not doc["sources"][0]["tables"][0][k]:  # type: ignore
+                    del doc["sources"][0]["tables"][0][k]  # type: ignore
         with open(os.path.join(sources_path, name + ".yml"), "w") as f:
             f.write(yaml.dump(doc, width=128))
 
 
-def check(tables):
+def check(tables: Tables) -> None:
     has_duplicates = False
     for table in tables.values():
         cols = set()
@@ -590,26 +602,16 @@ def check(tables):
 
 
 def xlsx_to_json_mapping(
-    filename,
-    flow,
-    batch_profile,
-    datalake_profile,
-    batch_location,
-    datalake_location,
-    source_schema,
-    target_schema,
-    field_delimiter=DEFAULT_FIELD_DELIMITER,
-    worksheet=0,
-):
+    filename: str,
+    flow: str,
+    config: Config,
+    field_delimiter: str = DEFAULT_FIELD_DELIMITER,
+    worksheet: int = 0,
+) -> None:
     tables = parse_xlsx(
         filename=filename,
         flow=flow,
-        batch_profile=batch_profile,
-        datalake_profile=datalake_profile,
-        batch_location=batch_location,
-        datalake_location=datalake_location,
-        source_schema=source_schema,
-        target_schema=target_schema,
+        config=config,
         field_delimiter=field_delimiter,
         worksheet=worksheet,
     )

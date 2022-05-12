@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-import os
 import click
 from pkg_resources import resource_string
-from typing import Optional
-from jinja2 import Template
+from typing import Any, Dict, List, Optional
+from jinja2 import Template  # type: ignore
 from .utils import (
     load_mapping,
     run,
+    Partitions,
+    TargetTables,
     DEFAULT_DATETIME_FORMAT,
     DEFAULT_DATE_FORMAT,
     DEFAULT_PARTITIONS,
@@ -27,7 +28,7 @@ class BatchToDatalake(object):
         self,
         flow: str,
         athena_location: str,
-        excluded_tables=None,
+        excluded_tables: TargetTables = None,
         datetime_format: Optional[str] = None,
         date_format: Optional[str] = None,
         decimal_format: Optional[str] = None,
@@ -47,13 +48,13 @@ class BatchToDatalake(object):
         self.debug = debug
 
     @property
-    def table_names(self):
+    def table_names(self) -> List[str]:
         return sorted(x for x in self.mapping.keys() if x not in self.excluded_tables)
 
-    def table_columns(self, table):
-        return self.mapping[table]["columns"]
+    def table_columns(self, table: str) -> List[str]:
+        return self.mapping[table]["columns"]  # type: ignore
 
-    def render(self, template, table, **kargs):
+    def render(self, template: str, table: str, **kargs: Dict[str, Any]) -> str:
         table_def = self.mapping[table]
         columns = self.table_columns(table)
         data = {
@@ -72,18 +73,18 @@ class BatchToDatalake(object):
             "remove_quotes": table_def.get("remove_quotes") or None,
         }
         data.update(kargs)
-        return Template(template).render(**data)
+        return Template(template).render(**data)  # type: ignore
 
-    def sql_batch_to_datalake(self, table: str, partitions, source_format: str) -> None:
+    def sql_batch_to_datalake(self, table: str, partitions: Partitions) -> str:
         partitions = dict((k, v.replace("'", "''")) for k, v in partitions.items() if v)
         template = resource_string("dbting.templates", "sql_batch_to_datalake.sql").decode("utf-8")
         return self.render(template, table=table, partitions=partitions)
 
-    def prepare_location(self, location, partitions):
+    def prepare_location(self, location: str, partitions: Partitions) -> str:
         # Concatenate the location and partitions, return an s3 path
         return location + "/".join(["{}={}".format(k, v) for k, v in partitions.items() if v])
 
-    def delete_from_s3_datalake(self, table, partitions):
+    def delete_from_s3_datalake(self, table: str, partitions: Partitions) -> None:
         # Clean the target datalake
         table_def = self.mapping[table]
         table_partitions = table_def.get("partitions", DEFAULT_PARTITIONS)
@@ -92,7 +93,7 @@ class BatchToDatalake(object):
         if not self.dry_run:
             run(["aws", "s3", "rm", "--recursive", path], debug=self.debug)
 
-    def add_source_partition(self, table, partitions):
+    def add_source_partition(self, table: str, partitions: Partitions) -> None:
         # Add source partion
         table_def = self.mapping[table]
         # Check partition parameters
@@ -115,15 +116,11 @@ class BatchToDatalake(object):
         if not self.dry_run:
             run(command, debug=self.debug)
 
-    def athena_batch_to_datalake(self, table, partitions):
+    def athena_batch_to_datalake(self, table: str, partitions: Partitions) -> None:
         table_def = self.mapping[table]
         table_partitions = table_def.get("partitions", DEFAULT_PARTITIONS)
         partitions = partitions if table_partitions else {}
-        sql = self.sql_batch_to_datalake(
-            table=table,
-            partitions=partitions,
-            source_format=table_def.get("source_format"),
-        )
+        sql = self.sql_batch_to_datalake(table=table, partitions=partitions)
         context = {"Database": table_def["target_schema"]}
         qm = QueryManager(athena_location=self.athena_location, dry_run=self.dry_run, debug=self.debug)
         qm.execute_query(sql, context)
@@ -136,7 +133,7 @@ def batch_to_datalake(
     flow: str,
     table: str,
     athena_location: str,
-    partitions,
+    partitions: Partitions,
     datetime_format: Optional[str] = None,
     date_format: Optional[str] = None,
     decimal_format: Optional[str] = None,

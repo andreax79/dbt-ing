@@ -11,7 +11,6 @@ from .utils import (
     TargetTables,
     DEFAULT_DATETIME_FORMAT,
     DEFAULT_DATE_FORMAT,
-    DEFAULT_PARTITIONS,
 )
 from .qm import QueryManager
 
@@ -28,6 +27,7 @@ class BatchToDatalake(object):
         self,
         flow: str,
         athena_location: str,
+        default_partitions: str,
         excluded_tables: TargetTables = None,
         datetime_format: Optional[str] = None,
         date_format: Optional[str] = None,
@@ -38,6 +38,7 @@ class BatchToDatalake(object):
     ) -> None:
         self.flow = flow
         self.athena_location = athena_location
+        self.default_partitions = default_partitions
         self.mapping = load_mapping(flow)
         self.excluded_tables = excluded_tables or []
         self.datetime_format = datetime_format or DEFAULT_DATETIME_FORMAT
@@ -87,7 +88,7 @@ class BatchToDatalake(object):
     def delete_from_s3_datalake(self, table: str, partitions: Partitions) -> None:
         # Clean the target datalake
         table_def = self.mapping[table]
-        table_partitions = table_def.get("partitions", DEFAULT_PARTITIONS)
+        table_partitions = table_def.get("partitions", self.default_partitions)
         path = self.prepare_location(table_def["target_location"], partitions if table_partitions else {})
         click.secho("Delete {}".format(path))
         if not self.dry_run:
@@ -97,12 +98,12 @@ class BatchToDatalake(object):
         # Add source partion
         table_def = self.mapping[table]
         # Check partition parameters
-        table_partitions = table_def.get("partitions", DEFAULT_PARTITIONS)
+        table_partitions = table_def.get("partitions", self.default_partitions)
         if isinstance(table_partitions, str):
             table_partitions = [x.strip() for x in table_partitions.split(",")]
         for partition in table_partitions:
             if partitions.get(partition) is None:
-                raise Exception("Missing partition {}".format(partition))
+                raise BatchToDatalakeException("Missing partition {}".format(partition))
         if not any(partitions.values()):
             return
         # Add partition
@@ -118,7 +119,7 @@ class BatchToDatalake(object):
 
     def athena_batch_to_datalake(self, table: str, partitions: Partitions) -> None:
         table_def = self.mapping[table]
-        table_partitions = table_def.get("partitions", DEFAULT_PARTITIONS)
+        table_partitions = table_def.get("partitions", self.default_partitions)
         partitions = partitions if table_partitions else {}
         sql = self.sql_batch_to_datalake(table=table, partitions=partitions)
         context = {"Database": table_def["target_schema"]}
@@ -133,6 +134,7 @@ def batch_to_datalake(
     flow: str,
     table: str,
     athena_location: str,
+    default_partitions: str,
     partitions: Partitions,
     datetime_format: Optional[str] = None,
     date_format: Optional[str] = None,
@@ -142,6 +144,7 @@ def batch_to_datalake(
     dry_run: bool = False,
     debug: bool = False,
 ) -> None:
+    "Convert raw data to columnar formats"
     if table is None:
         tables = load_mapping(flow).keys()
         for table in tables:
@@ -149,6 +152,7 @@ def batch_to_datalake(
                 flow=flow,
                 table=table,
                 athena_location=athena_location,
+                default_partitions=default_partitions,
                 partitions=partitions,
                 datetime_format=datetime_format,
                 date_format=date_format,
@@ -162,6 +166,7 @@ def batch_to_datalake(
         b2d = BatchToDatalake(
             flow=flow,
             athena_location=athena_location,
+            default_partitions=default_partitions,
             datetime_format=datetime_format,
             date_format=date_format,
             decimal_format=decimal_format,

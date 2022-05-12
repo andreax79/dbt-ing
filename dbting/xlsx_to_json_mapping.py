@@ -15,7 +15,6 @@ from .utils import (
     Config,
     Table,
     Tables,
-    DEFAULT_PARTITIONS,
     DEFAULT_FIELD_DELIMITER,
     DEFAULT_SOURCE_FORMAT,
 )
@@ -114,6 +113,7 @@ def parse_row_select(table_def: Dict[str, Any], columns: List[Dict[str, Any]], r
 def parse_xlsx_legacy(
     ws: Workbook,
     flow: str,
+    default_partitions: str,
     batch_profile: str,
     datalake_profile: str,
     batch_location: str,
@@ -156,7 +156,7 @@ def parse_xlsx_legacy(
                 "source_schema": source_schema,
                 "target_schema": target_schema,
                 "field_delimiter": field_delimiter,
-                "partitions": DEFAULT_PARTITIONS,
+                "partitions": default_partitions,
                 "columns": [],
             }
             tables[target_table] = table_def
@@ -168,6 +168,7 @@ def parse_worsheet(
     ws: Workbook,
     flow: str,
     tables: Tables,
+    default_partitions: str,
     batch_profile: str,
     datalake_profile: str,
     batch_location: str,
@@ -192,7 +193,7 @@ def parse_worsheet(
         "source_schema": source_schema,
         "target_schema": target_schema,
         "field_delimiter": field_delimiter,
-        "partitions": DEFAULT_PARTITIONS,
+        "partitions": default_partitions,
         "columns": columns,
     }
     if table_def["type"] != "#INGESTION":
@@ -225,6 +226,7 @@ def parse_xlsx(
 ) -> Tables:
     # Read xlsx
     flow = flow.lower()
+    default_partitions = config["DEFAULT_PARTITIONS"]
     batch_profile = config["DBT__BATCH_PROFILE"]
     datalake_profile = config["DBT__DATALAKE_PROFILE"]
     batch_location = config["S3__BATCH_LOCATION"]
@@ -238,6 +240,7 @@ def parse_xlsx(
             return parse_xlsx_legacy(
                 ws=ws,
                 flow=flow,
+                default_partitions=default_partitions,
                 batch_profile=batch_profile,
                 datalake_profile=datalake_profile,
                 batch_location=batch_location,
@@ -253,6 +256,7 @@ def parse_xlsx(
                     ws=ws,
                     flow=flow,
                     tables=tables,
+                    default_partitions=default_partitions,
                     batch_profile=batch_profile,
                     datalake_profile=datalake_profile,
                     batch_location=batch_location,
@@ -267,7 +271,7 @@ def parse_xlsx(
         wb.close()
 
 
-def parse_rows(tables: Tables, flow: str) -> Tables:
+def parse_rows(tables: Tables, flow: str, config: Config) -> Tables:
     flow = flow.lower()
     data = []
     for target_table, table_def in list(tables.items()):
@@ -384,7 +388,7 @@ def parse_rows(tables: Tables, flow: str) -> Tables:
             elif isinstance(partitions, str):
                 partitions = [x.strip() for x in table_def["partitions"].split(",")]
         except Exception:
-            partitions = DEFAULT_PARTITIONS
+            partitions = config["DEFAULT_PARTITIONS"]
         table_def["partitions"] = partitions
         for k in partitions:
             if k == "year":
@@ -615,7 +619,7 @@ def xlsx_to_json_mapping(
         field_delimiter=field_delimiter,
         worksheet=worksheet,
     )
-    tables = parse_rows(tables, flow)
+    tables = parse_rows(tables, flow, config)
     check(tables)
     generate_sources(tables, "batch", flow)
     generate_sources(tables, "datalake", flow)

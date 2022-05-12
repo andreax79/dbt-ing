@@ -3,9 +3,19 @@
 import os
 import os.path
 import sys
+import json
 import click
 from typing import Dict, List, Optional
-from .utils import load_mapping, run, load_config, decrypt_config_passwords, write_config_file, VERSION
+from .utils import (
+    click_partition_options,
+    prepare_partitions,
+    load_mapping,
+    run,
+    load_config,
+    decrypt_config_passwords,
+    write_config_file,
+    VERSION,
+)
 from .batch_to_datalake import batch_to_datalake, BatchToDatalakeException
 from .ingest import ingest_model
 from sharepointcli.cli import main as spo  # type: ignore
@@ -35,44 +45,23 @@ def cli(
 
 @cli.command()
 @click.option("--flow", required=True)
-@click.option("--source", required=False)
-@click.option("--year", required=False, type=int)
-@click.option("--month", required=False, type=int)
-@click.option("--day", required=False, type=int)
-@click.option("--hour", required=False, type=int)
+@click_partition_options(config)
 @click.pass_context
-def test(
-    ctx: click.Context,
-    flow: str,
-    source: Optional[str],
-    year: Optional[int],
-    month: Optional[int],
-    day: Optional[int],
-    hour: Optional[int],
-) -> None:
+def test(ctx: click.Context, flow: str, **partitions_args: Dict[str, str]) -> None:
     "Run flow test"
     flow = flow.lower()
-    where = {
-        "year": "%04d" % int(year),
-        "month": "%02d" % int(month),
-        "day": "%02d" % int(day),
-    }
-    if source is not None:
-        where["source"] = source
-    if hour is not None:
-        where["hour"] = "%02d" % int(hour)
-    print(where)
-    # run(
-    #     [
-    #         "dbt",
-    #         "test",
-    #         "--models",
-    #         "models/sources/datalake/%s" % flow,
-    #         "--vars",
-    #         json.dumps(where),
-    #     ],
-    #     debug=ctx.obj["debug"],
-    # )
+    partitions = prepare_partitions(partitions_args, config)
+    run(
+        [
+            "dbt",
+            "test",
+            "--models",
+            "models/sources/datalake/%s" % flow,
+            "--vars",
+            json.dumps(partitions),
+        ],
+        debug=ctx.obj["debug"],
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -83,12 +72,9 @@ def test(
 @click.option("--flow", required=True)
 @click.option("--table", required=True)
 @click.argument("files", required=True, nargs=-1, type=click.Path())
-@click.option("--year", required=False)
-@click.option("--month", required=False)
-@click.option("--day", required=False)
-@click.option("--hour", required=False)
+@click_partition_options(config)
 @click.pass_context
-def upload(ctx: click.Context, flow: str, table: str, files: List[str], kargs: Dict[str, str]) -> None:
+def upload(ctx: click.Context, flow: str, table: str, files: List[str], **partitions_args: Dict[str, str]) -> None:
     "Upload raw files to batch location"
     flow = flow.lower()
     try:
@@ -101,10 +87,11 @@ def upload(ctx: click.Context, flow: str, table: str, files: List[str], kargs: D
     except KeyError:
         click.secho("table {} not found".format(table), fg="red")
         sys.exit(1)
+    partitions = prepare_partitions(partitions_args, config)
     source_location = table_mapping.get("source_location")
     if not source_location:
         source_location = os.path.join(table_mapping.get("batch_location"), flow)  # type: ignore
-    path = source_location + "/".join(["{}={}".format(k, v) for k, v in kargs.items() if v]) + "/"
+    path = source_location + "/".join(["{}={}".format(k, v) for k, v in partitions.items() if v]) + "/"
     for filename in files:
         run(["aws", "s3", "cp", filename, path], debug=ctx.obj["debug"])
 
@@ -151,11 +138,6 @@ def ingest(
 @cli.command()
 @click.option("--flow", required=True)
 @click.option("--table", required=False)
-@click.option("--source", required=False)
-@click.option("--year", required=False, type=int)
-@click.option("--month", required=False, type=int)
-@click.option("--day", required=False, type=int)
-@click.option("--hour", required=False, type=int)
 @click.option("--datetime_format", required=False)
 @click.option("--date_format", required=False)
 @click.option("--decimal_format", required=False)
@@ -166,24 +148,21 @@ def ingest(
     default=True,
 )
 @click.option("--dry-run", is_flag=True, help="Perform a dry run", default=False)
+@click_partition_options(config)
 @click.pass_context
 def datalake(
     ctx: click.Context,
     flow: str,
     table: str,
-    source: Optional[str],
-    year: Optional[int],
-    month: Optional[int],
-    day: Optional[int],
-    hour: Optional[int],
     datetime_format: Optional[str],
     date_format: Optional[str],
     decimal_format: Optional[str],
     where_condition: Optional[str],
     add_source_partition: bool,
     dry_run: bool,
+    **partitions_args: Dict[str, str],
 ) -> None:
-    "Load data from batch to datalake"
+    "Convert raw data to columnar formats (batch to datalake)"
     flow = flow.lower()
 
     try:
@@ -191,13 +170,8 @@ def datalake(
             flow=flow,
             table=table,
             athena_location=config["S3__ATHENA_LOCATION"],
-            partitions={
-                "source": source if source is not None else None,
-                "year": ("%04d" % int(year)) if year is not None else None,
-                "month": ("%02d" % int(month)) if month is not None else None,
-                "day": ("%02d" % int(day)) if day is not None else None,
-                "hour": ("%02d" % int(hour)) if hour is not None else None,
-            },
+            default_partitions=config["DEFAULT_PARTITIONS"],
+            partitions=prepare_partitions(partitions_args, config),
             datetime_format=datetime_format,
             date_format=date_format,
             decimal_format=decimal_format,

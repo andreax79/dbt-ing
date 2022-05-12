@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import pprint
 import click
 from pkg_resources import resource_string
 from typing import Optional
@@ -85,13 +84,13 @@ class BatchToDatalake(object):
         return location + "/".join(["{}={}".format(k, v) for k, v in partitions.items() if v])
 
     def delete_from_s3_datalake(self, table, partitions):
-        # Clean the target datalakeChiappopeloso
+        # Clean the target datalake
         table_def = self.mapping[table]
         table_partitions = table_def.get("partitions", DEFAULT_PARTITIONS)
         path = self.prepare_location(table_def["target_location"], partitions if table_partitions else {})
-        click.echo("Delete {}".format(path))
+        click.secho("Delete {}".format(path))
         if not self.dry_run:
-            run(["aws", "s3", "rm", "--recursive", path])
+            run(["aws", "s3", "rm", "--recursive", path], debug=self.debug)
 
     def add_source_partition(self, table, partitions):
         # Add source partion
@@ -113,9 +112,8 @@ class BatchToDatalake(object):
             table_def["source_table"],
         ]
         command.extend(["--{}={}".format(k, v) for k, v in partitions.items() if v is not None])
-        click.echo(command)
         if not self.dry_run:
-            run(command)
+            run(command, debug=self.debug)
 
     def athena_batch_to_datalake(self, table, partitions):
         table_def = self.mapping[table]
@@ -126,17 +124,12 @@ class BatchToDatalake(object):
             partitions=partitions,
             source_format=table_def.get("source_format"),
         )
-        if self.debug:
-            click.echo("-" * 80)
-            click.echo(sql)
-            click.echo("-" * 80)
-        if not self.dry_run:
-            context = {"Database": table_def["target_schema"]}
-            qm = QueryManager(athena_location=self.athena_location)
-            qm.execute_query(sql, context)
-            errors = qm.wait_executions()
-            if errors:
-                raise BatchToDatalakeException(errors[0])
+        context = {"Database": table_def["target_schema"]}
+        qm = QueryManager(athena_location=self.athena_location, dry_run=self.dry_run, debug=self.debug)
+        qm.execute_query(sql, context)
+        errors = qm.wait_executions()
+        if errors:
+            raise BatchToDatalakeException(errors[0])
 
 
 def batch_to_datalake(

@@ -20,8 +20,10 @@ class DryRunException(Exception):
 
 
 class QueryManager:
-    def __init__(self, athena_location, client=None, dry_run=False):
+    def __init__(self, athena_location, client=None, dry_run=False, debug=False):
         self.config = {"OutputLocation": athena_location}
+        self.debug = debug
+        # Athena client setup
         if dry_run:
             self.client = None
         elif client:
@@ -34,7 +36,8 @@ class QueryManager:
 
     def start_query_execution(self, sql, context):
         try:
-            click.echo(sql)
+            if self.debug:
+                click.secho(sql, fg="cyan")
             if self.client is None:
                 raise DryRunException
             r = self.client.start_query_execution(
@@ -75,7 +78,7 @@ class QueryManager:
                 r = self.client.get_query_execution(QueryExecutionId=execution_id)
                 state = r["QueryExecution"]["Status"]["State"]
                 if state in ["QUEUED", "RUNNING"]:
-                    click.echo("{} {}".format(state, r["QueryExecution"]["Query"]))
+                    click.secho("{} {}".format(state, r["QueryExecution"]["Query"]))
                 else:
                     if state == "FAILED":
                         error = r["QueryExecution"]["Status"]["StateChangeReason"]

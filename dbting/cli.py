@@ -85,7 +85,8 @@ def test(ctx, flow, source, year, month, day, hour):
             "models/sources/datalake/%s" % flow,
             "--vars",
             json.dumps(where),
-        ]
+        ],
+        debug=ctx.obj["debug"],
     )
 
 
@@ -120,7 +121,7 @@ def upload(ctx, flow, table, files, **kargs):
         source_location = os.path.join(table_mapping.get("batch_location"), flow)
     path = source_location + "/".join(["{}={}".format(k, v) for k, v in kargs.items() if v]) + "/"
     for filename in files:
-        run(["aws", "s3", "cp", filename, path])
+        run(["aws", "s3", "cp", filename, path], debug=ctx.obj["debug"])
 
 
 # -----------------------------------------------------------------------------
@@ -214,7 +215,7 @@ def ingest(
     flow_xlsx = get_flow_xlsx(sharepoint_url=ctx.obj["sharepoint_url"], flow=flow, download=download)
 
     # XLS parsing
-    click.echo("{flow} - Parse XLSX".format(flow=flow))
+    click.secho("{flow} - Parse XLSX".format(flow=flow))
     try:
         xlsx_to_json_mapping(
             filename=flow_xlsx,
@@ -233,24 +234,26 @@ def ingest(
 
     if create_tables:
         if True:  # Athena TODO
-            click.echo("{flow} - Create external tables".format(flow=flow))
+            click.secho("{flow} - Create external tables".format(flow=flow))
             drop_external_tables(
                 flow=flow,
                 athena_location=config["S3__ATHENA_LOCATION"],
                 include_target_tables=include_target_tables,
                 dry_run=dry_run,
+                debug=ctx.obj["debug"],
             )
             create_external_tables(
                 flow=flow,
                 athena_location=config["S3__ATHENA_LOCATION"],
                 include_target_tables=include_target_tables,
                 dry_run=dry_run,
+                debug=ctx.obj["debug"],
             )
         else:
             # Check tables argument
             tables = load_mapping(flow, include_target_tables)
             # Create dbt external tables
-            click.echo("{flow} - Create external tables".format(flow=flow))
+            click.secho("{flow} - Create external tables".format(flow=flow))
             args = {"flow": flow, "test": True}
             if include_target_tables:
                 source_node_names = []
@@ -267,16 +270,18 @@ def ingest(
                         "create_external_tables",
                         "--args",
                         json.dumps(args),
-                    ]
+                    ],
+                    debug=ctx.obj["debug"],
                 )
         if repair_tables:
             # Repair external tables
-            click.echo("{flow} - Repair external tables".format(flow=flow))
+            click.secho("{flow} - Repair external tables".format(flow=flow))
             repair_external_tables(
                 flow=flow,
                 athena_location=config["S3__ATHENA_LOCATION"],
                 include_target_tables=include_target_tables,
                 dry_run=dry_run,
+                debug=ctx.obj["debug"],
             )
 
 
@@ -359,7 +364,10 @@ def doc(ctx, upload):
     run(["dbt", "docs", "generate"])
     if upload and config.get("S3__DOC_LOCATION"):
         # Upload documentation to S3 bucket
-        run(["aws", "s3", "sync", "--delete", "--acl", "public-read", "target/", config["S3__DOC_LOCATION"]])
+        run(
+            ["aws", "s3", "sync", "--delete", "--acl", "public-read", "target/", config["S3__DOC_LOCATION"]],
+            debug=ctx.obj["debug"],
+        )
 
 
 # -----------------------------------------------------------------------------

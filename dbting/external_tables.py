@@ -12,14 +12,14 @@ from .qm import QueryManager
 __all__ = ["create_external_tables", "drop_external_tables", "repair_external_tables"]
 
 
-def repair_external_tables(flow, athena_location, include_target_tables=None, dry_run=False):
+def repair_external_tables(flow, athena_location, include_target_tables=None, dry_run=False, debug=False):
     "include_target_tables = list of target tables to be included, include all if empty"
     tables = set()
     mapping = load_mapping(flow, include_target_tables)
     for item in mapping.values():
         tables.add("{source_schema}.{source_table}".format(**item))  # source table
         tables.add("{target_schema}.{target_table}".format(**item))  # target table
-    qm = QueryManager(athena_location=athena_location, dry_run=dry_run)
+    qm = QueryManager(athena_location=athena_location, dry_run=dry_run, debug=debug)
     for table in tables:
         context = {"Database": table.split(".")[0]}
         sql = "msck repair table {}".format(table)
@@ -27,10 +27,10 @@ def repair_external_tables(flow, athena_location, include_target_tables=None, dr
     qm.wait_executions()
 
 
-def drop_external_tables(flow, athena_location, include_target_tables=None, dry_run=False):
+def drop_external_tables(flow, athena_location, include_target_tables=None, dry_run=False, debug=False):
     "Drop external tables include_target_tables = list of target tables to be included, include all if empty"
     mapping = load_mapping(flow, include_target_tables)
-    qm = QueryManager(athena_location=athena_location, dry_run=dry_run)
+    qm = QueryManager(athena_location=athena_location, dry_run=dry_run, debug=debug)
     for table in mapping.values():
         if not table.get("source_location"):
             table["source_location"] = os.path.join(table.get("batch_location"), flow)
@@ -43,10 +43,10 @@ def drop_external_tables(flow, athena_location, include_target_tables=None, dry_
     qm.wait_executions()
 
 
-def create_external_tables(flow, athena_location, include_target_tables=None, dry_run=False):
+def create_external_tables(flow, athena_location, include_target_tables=None, dry_run=False, debug=False):
     "Create external tables include_target_tables = list of target tables to be included, include all if empty"
     mapping = load_mapping(flow, include_target_tables)
-    qm = QueryManager(athena_location=athena_location, dry_run=dry_run)
+    qm = QueryManager(athena_location=athena_location, dry_run=dry_run, debug=debug)
     for table in mapping.values():
         if not table.get("source_location"):
             table["source_location"] = os.path.join(table.get("batch_location"), flow)

@@ -91,12 +91,16 @@ def filter_tables(mapping, include_target_tables=None):
     return result
 
 
-def run(command) -> None:
+def run(command, debug=False) -> None:
     "Execute a command and exit if the command fails"
     if isinstance(command, str):
+        if debug:
+            click.secho(command, fg="cyan")
         if os.system(command) != 0:
             sys.exit(1)
     else:
+        if debug:
+            click.secho(" ".join(command), fg="cyan")
         if subprocess.run(command).returncode != 0:
             sys.exit(1)
 
@@ -132,7 +136,7 @@ def decrypt_config_passwords(config) -> None:
             k = k[:-4]
             v = key.decrypt(bytes(v, "ascii")).decode("ascii")
             config[k] = v
-    # click.echo(key.encrypt(bytes('key', 'ascii')).decode('ascii'))
+    # click.secho(key.encrypt(bytes('key', 'ascii')).decode('ascii'))
 
 
 def write_config_file(config, filename: str) -> None:

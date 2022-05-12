@@ -6,6 +6,7 @@ import os.path
 import sys
 import json
 import yaml
+import click
 import shutil
 from openpyxl import load_workbook
 from .utils import (
@@ -174,7 +175,7 @@ def parse_worsheet(
     flow = flow.lower()
     columns = []
     if ws["A1"].value != "TYPE":
-        print("- skip worksheet {}".format(ws.title))
+        click.secho("- skip worksheet {}".format(ws.title))
         return
     table_def = {
         "parse_row": None,
@@ -205,7 +206,7 @@ def parse_worsheet(
     del table_def["parse_row"]
     del table_def["header"]
     target_table = get_target_table_name(columns[0]["target_table"], flow)
-    print("- worksheet {} table {}".format(ws.title, target_table))
+    click.secho("- worksheet {} table {}".format(ws.title, target_table))
     if target_table in tables:
         raise MappingException("Duplicated target table {}".format(target_table))
     tables[target_table] = table_def
@@ -266,10 +267,10 @@ def parse_rows(tables, flow):
     data = []
     for target_table, table_def in list(tables.items()):
         if to_bool(table_def.get("exclude_table")):
-            print("- skip target table %s" % target_table)
+            click.secho("- skip target table %s" % target_table)
             del tables[target_table]
             continue
-        print("- %s" % target_table)
+        click.secho("- %s" % target_table)
         columns = []
         table_def["col_number"] = 0
         for row_number, item in enumerate(table_def["columns"], start=1):
@@ -367,7 +368,7 @@ def parse_rows(tables, flow):
                     raise MappingException("#{} invalid data_type in row {}".format(row_number, str(item)))
                 columns.append(col)
             except Empty:
-                # print('#{} empty line'.format(row_number))
+                # click.secho('#{} empty line'.format(row_number), fg='red')
                 pass
 
         # Add partition columns
@@ -576,10 +577,11 @@ def check(tables):
         cols = set()
         for column in table["columns"]:
             if column["target_column"] in cols:
-                print(
+                click.secho(
                     "Duplicate column '{column}' in table '{table}'".format(
                         column=column["target_column"], table=table["target_table"]
-                    )
+                    ),
+                    fg="red",
                 )
                 has_duplicates = True
             cols.add(column["target_column"])

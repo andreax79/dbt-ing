@@ -5,7 +5,7 @@ create external table {{ source_schema }}.{{ source_table }} (
 )
 partitioned by (
 {% for column in columns | selectattr('partition', '==', 'yes') -%}
-  `{{ column.target_column }}` varchar(65535){{ "," if not loop.last }}
+  `{{ column.source_column }}` varchar(65535){{ "," if not loop.last }}
 {% endfor %}
 )
 {% if source_format == 'json' %}

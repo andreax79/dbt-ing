@@ -81,7 +81,13 @@ class Empty(Exception):
 
 def parse_row_config(table_def: Dict[str, Any], columns: List[Dict[str, Any]], row: List[Any]) -> None:
     try:
-        table_def[row[0].strip().lower()] = row[1].strip() if row[1] else ""
+        if not row[1]:
+            value = ""
+        elif isinstance(row[1], str):
+            value = row[1].strip()
+        else:
+            value = row[1]
+        table_def[row[0].strip().lower()] = value
     except Exception as ex:
         raise MappingException("Error parsing row {}: {}".format(row, ex))
 
@@ -273,7 +279,6 @@ def parse_xlsx(
 
 def parse_rows(tables: Tables, flow: str, config: Config) -> Tables:
     flow = flow.lower()
-    data = []
     for target_table, table_def in list(tables.items()):
         if to_bool(table_def.get("exclude_table")):
             click.secho("- skip target table %s" % target_table)
@@ -390,10 +395,14 @@ def parse_rows(tables: Tables, flow: str, config: Config) -> Tables:
         except Exception:
             partitions = config["DEFAULT_PARTITIONS"]
         table_def["partitions"] = partitions
-        for k in partitions:
-            if k == "year":
+        for i, column in enumerate(partitions):
+            if to_bool(table_def.get("not_hive_partitions")):
+                source_column = "partition_{}".format(i)
+            else:
+                source_column = column
+            if column == "year":
                 data_type = "char(4)"
-            elif k in ("day", "month", "hour", "minute"):
+            elif column in ("day", "month", "hour", "minute"):
                 data_type = "char(2)"
             else:
                 data_type = "varchar(20)"
@@ -401,25 +410,20 @@ def parse_rows(tables: Tables, flow: str, config: Config) -> Tables:
                 "source_schema": table_def["source_schema"],
                 "source_table": table_def["source_table"],
                 "source_location": table_def["source_location"],
-                "source_column": k,
+                "source_column": source_column,
                 "target_schema": table_def["target_schema"],
                 "target_table": table_def["target_table"],
                 "target_location": table_def["target_location"],
-                "target_column": k,
+                "target_column": column,
                 "description": "",
                 "partition": "yes",
                 "data_type": data_type,
             }
             columns.append(column)
         table_def["columns"] = columns
-        data.extend(columns)
 
     # Write json
     os.makedirs("flows", exist_ok=True)
-    with open(os.path.join("flows", flow + ".json"), "w") as f:
-        # Sort columns by schema and table
-        data = sorted(data, key=lambda x: (x["source_schema"], x["source_table"]))
-        f.write(json.dumps(data, indent=2))
     with open(os.path.join("flows", flow + ".cfg.json"), "w") as f:
         f.write(json.dumps(tables, indent=2))
     return tables

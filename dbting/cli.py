@@ -219,7 +219,7 @@ def setup(ctx: click.Context, update: bool, auth: bool, target: str) -> None:
     config["CWD"] = os.getcwd()
     # Update dependencies
     if update:
-        if os.path.exists("./bin/activate"):  # Virtual env
+        if "VIRTUAL_ENV" in os.environ.keys():  # Virtual env
             run(["pip3", "install", "--upgrade", "-r", "requirements.txt"])
         else:
             run(["pip3", "install", "--user", "--upgrade", "-r", "requirements.txt"])

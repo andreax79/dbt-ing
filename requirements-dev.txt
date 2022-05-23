@@ -8,3 +8,5 @@ sphinx
 tox
 twine<3.4
 pytest
+types-PyYAML
+types-setuptools

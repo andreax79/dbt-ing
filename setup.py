@@ -38,5 +38,5 @@ setup(
         ],
     },
     test_suite="tests",
-    tests_require=["nose"],
+    tests_require=["pytest"],
 )

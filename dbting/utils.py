@@ -198,7 +198,7 @@ def prepare_partitions(partitions_args: Dict[str, Any], config: Config) -> Parti
         if value is not None:
             if partition["type"] == "int":
                 value = "{number:0{width}d}".format(width=partition["length"], number=value)
-            result[name] = value  # type: ignore
+            result[name] = value
     return result
 
 

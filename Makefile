@@ -16,6 +16,7 @@ build: clean
 clean:
 	-rm -rf build dist
 	-rm -rf *.egg-info
+	-rm -rf bin lib share
 
 test:
 	python3 setup.py test

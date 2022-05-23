@@ -7,3 +7,4 @@ mypy
 sphinx
 tox
 twine<3.4
+pytest

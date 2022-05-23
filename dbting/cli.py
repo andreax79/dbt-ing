@@ -8,11 +8,12 @@ import click
 from typing import Dict, List, Optional
 from .utils import (
     click_partition_options,
-    prepare_partitions,
-    load_mapping,
-    run,
-    load_config,
     decrypt_config_passwords,
+    get_batch_location,
+    load_config,
+    load_mapping,
+    prepare_partitions,
+    run,
     write_config_file,
     VERSION,
 )
@@ -77,21 +78,8 @@ def test(ctx: click.Context, flow: str, **partitions_args: Dict[str, str]) -> No
 def upload(ctx: click.Context, flow: str, table: str, files: List[str], **partitions_args: Dict[str, str]) -> None:
     "Upload raw files to batch location"
     flow = flow.lower()
-    try:
-        mapping = load_mapping(flow)
-    except Exception:
-        click.secho("flow {} not found".format(flow), fg="red")
-        sys.exit(1)
-    try:
-        table_mapping = mapping[table]
-    except KeyError:
-        click.secho("table {} not found".format(table), fg="red")
-        sys.exit(1)
-    partitions = prepare_partitions(partitions_args, config)
-    source_location = table_mapping.get("source_location")
-    if not source_location:
-        source_location = os.path.join(table_mapping.get("batch_location"), flow)  # type: ignore
-    path = source_location + "/".join(["{}={}".format(k, v) for k, v in partitions.items() if v]) + "/"
+    table_def = load_mapping(flow, include_target_tables=[table])[table]
+    path = get_batch_location(flow, table_def, partitions_args, config)
     for filename in files:
         run(["aws", "s3", "cp", filename, path], debug=ctx.obj["debug"])
 

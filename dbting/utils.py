@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 __all__ = [
     "click_partition_options",
+    "get_batch_location",
     "decrypt_config_passwords",
     "load_mapping",
     "load_config",
@@ -89,8 +90,15 @@ def to_bool(value: Any) -> bool:
 def load_mapping(flow: str, include_target_tables: TargetTables = None) -> Tables:
     "Return mapping configuration for a given flow"
     ingestion_mapping_path = os.path.join("flows", "{flow}.cfg.json".format(flow=flow))
-    with open(ingestion_mapping_path, "r") as f:
-        mapping = json.load(f)
+    if not os.path.exists(ingestion_mapping_path):
+        click.secho("flow {} not found".format(flow), fg="red")
+        sys.exit(1)
+    try:
+        with open(ingestion_mapping_path, "r") as f:
+            mapping = json.load(f)
+    except Exception:
+        click.secho("error reading flow {}".format(flow), fg="red")
+        sys.exit(1)
     return filter_tables(mapping, include_target_tables)
 
 
@@ -192,3 +200,17 @@ def prepare_partitions(partitions_args: Dict[str, Any], config: Config) -> Parti
                 value = "{number:0{width}d}".format(width=partition["length"], number=value)
             result[name] = value  # type: ignore
     return result
+
+
+def get_batch_location(flow: str, table_def: Table, partitions_args: Dict[str, Any], config: Config) -> str:
+    "Return the batch location for a given flow/table/partition"
+    partitions = prepare_partitions(partitions_args, config)
+    source_location = table_def.get("source_location")
+    if not source_location:
+        source_location = os.path.join(table_def.get("batch_location"), flow)  # type: ignore
+    path = source_location
+    if to_bool(table_def.get("not_hive_partitions")):
+        path = "/".join(["{}".format(v) for k, v in partitions.items() if v]) + "/"
+    else:
+        path = "/".join(["{}={}".format(k, v) for k, v in partitions.items() if v]) + "/"
+    return os.path.join(source_location, path)

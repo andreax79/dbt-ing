@@ -22,14 +22,20 @@ __all__ = [
     "to_bool",
     "write_config_file",
     "AthenaContext",
+    "Columns",
     "Config",
     "Table",
     "Tables",
     "TargetTables",
     "Partitions",
+    "FORMAT_CSV",
+    "FORMAT_JSON",
+    "PARTITIONS_STYLE_HIVE",
+    "PARTITIONS_STYLE_NON_HIVE",
     "DEFAULT_DATETIME_FORMAT",
     "DEFAULT_DATE_FORMAT",
     "DEFAULT_FIELD_DELIMITER",
+    "DEFAULT_PARTITIONS_STYLE",
     "DEFAULT_SOURCE_FORMAT",
     "VERSION",
 ]
@@ -46,10 +52,16 @@ _BOOL_LOOKUP = {
     1: True,
 }
 
+FORMAT_CSV = "csv"
+FORMAT_JSON = "json"
+PARTITIONS_STYLE_HIVE = "hive"
+PARTITIONS_STYLE_NON_HIVE = "non-hive"
+
 DEFAULT_DATETIME_FORMAT = "YYYYMMdd HH.mm.ss"
 DEFAULT_DATE_FORMAT = "YYYYMMdd"
 DEFAULT_FIELD_DELIMITER = "|"
 DEFAULT_SOURCE_FORMAT = "csv"
+DEFAULT_PARTITIONS_STYLE = "hive"
 DEFAULT_CONFIG = {
     "CONFIG": "config/dbting.yml",
     "SPO_CREDENTIALS": "~/.spo/credentials",
@@ -68,6 +80,7 @@ with open(VERSION_FILE) as f:
 
 # Typing
 AthenaContext = Dict[str, str]
+Columns = List[Dict[str, Any]]
 Config = Dict[str, Any]
 Table = Dict[str, Any]
 Tables = Dict[str, Table]
@@ -209,8 +222,10 @@ def get_batch_location(flow: str, table_def: Table, partitions_args: Dict[str, A
     if not source_location:
         source_location = os.path.join(table_def.get("batch_location"), flow)  # type: ignore
     path = source_location
-    if to_bool(table_def.get("not_hive_partitions")):
+    if table_def["partitions_style"] == PARTITIONS_STYLE_NON_HIVE:
         path = "/".join(["{}".format(v) for k, v in partitions.items() if v]) + "/"
-    else:
+    elif table_def["partitions_style"] == PARTITIONS_STYLE_HIVE:
         path = "/".join(["{}={}".format(k, v) for k, v in partitions.items() if v]) + "/"
+    else:
+        raise Exception("Invalid partitions style {}".format(table_def["partitions_style"]))
     return os.path.join(source_location, path)

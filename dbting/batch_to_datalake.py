@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from jinja2 import Template  # type: ignore
 from .utils import (
     load_mapping,
+    to_bool,
     run,
     Partitions,
     TargetTables,
@@ -98,12 +99,13 @@ class BatchToDatalake(object):
         # Add source partion
         table_def = self.mapping[table]
         # Check partition parameters
-        table_partitions = table_def.get("partitions", self.default_partitions)
-        if isinstance(table_partitions, str):
-            table_partitions = [x.strip() for x in table_partitions.split(",")]
+        table_partitions = [x for x in table_def.get("columns") if to_bool(x.get("partition"))]
+        source_partitions: Partitions = {}
         for partition in table_partitions:
-            if partitions.get(partition) is None:
-                raise BatchToDatalakeException("Missing partition {}".format(partition))
+            try:
+                source_partitions[partition["source_column"]] = partitions[partition["target_column"]]
+            except KeyError:
+                raise BatchToDatalakeException("Missing partition {}".format(partition["target_column"]))
         if not any(partitions.values()):
             return
         # Add partition
@@ -113,7 +115,7 @@ class BatchToDatalake(object):
             table_def["source_schema"],
             table_def["source_table"],
         ]
-        command.extend(["--{}={}".format(k, v) for k, v in partitions.items() if v is not None])
+        command.extend(["--{}={}".format(k, v) for k, v in source_partitions.items() if v is not None])
         if not self.dry_run:
             run(command, debug=self.debug)
 

@@ -93,7 +93,6 @@ def upload(ctx: click.Context, flow: str, table: str, files: List[str], **partit
 @click.option("--create-tables/--no-create-tables", default=False)
 @click.option("--repair-tables/--no-repair-tables", default=True)
 @click.option("--download/--no-download", default=True)
-@click.option("--field_delimiter", default="|")
 @click.option("--table", "-t", "include_target_tables", multiple=True, help="Tables to be created/repaired")
 @click.option("--dry-run", is_flag=True, help="Perform a dry run", default=False)
 @click.pass_context
@@ -103,7 +102,6 @@ def ingest(
     create_tables: bool,
     repair_tables: bool,
     download: bool,
-    field_delimiter: str,
     include_target_tables: List[str],
     dry_run: bool,
 ) -> None:
@@ -112,7 +110,6 @@ def ingest(
         create_tables=create_tables,
         repair_tables=repair_tables,
         download=download,
-        field_delimiter=field_delimiter,
         include_target_tables=include_target_tables,
         dry_run=dry_run,
         debug=ctx.obj["debug"],

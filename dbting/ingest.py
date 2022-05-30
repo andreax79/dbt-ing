@@ -85,7 +85,6 @@ def ingest_model(
     create_tables: bool,
     repair_tables: bool,
     download: bool,
-    field_delimiter: str,
     include_target_tables: TargetTables,
     config: Config,
     dry_run: bool = False,
@@ -98,13 +97,12 @@ def ingest_model(
     flow_xlsx = get_flow_xlsx(flow=flow, download=download, config=config)
 
     # XLS parsing
-    click.secho("{flow} - Parse XLSX".format(flow=flow))
+    click.secho("{flow} - Parse XLSX".format(flow=flow), fg="cyan")
     try:
         xlsx_to_json_mapping(
             filename=flow_xlsx,
             flow=flow,
             config=config,
-            field_delimiter=field_delimiter,
         )
     except MappingException as ex:
         click.secho("Error: %s" % ex, fg="red")
@@ -112,7 +110,7 @@ def ingest_model(
 
     if create_tables:
         if True:  # Athena TODO
-            click.secho("{flow} - Create external tables".format(flow=flow))
+            click.secho("{flow} - Create external tables".format(flow=flow), fg="cyan")
             drop_external_tables(
                 flow=flow,
                 athena_location=config["S3__ATHENA_LOCATION"],
@@ -131,7 +129,7 @@ def ingest_model(
             # Check tables argument
             tables = load_mapping(flow, include_target_tables)
             # Create dbt external tables
-            click.secho("{flow} - Create external tables".format(flow=flow))
+            click.secho("{flow} - Create external tables".format(flow=flow), fg="cyan")
             args = {"flow": flow, "test": True}
             if include_target_tables:
                 source_node_names = []
@@ -153,7 +151,7 @@ def ingest_model(
                 )
         if repair_tables:
             # Repair external tables
-            click.secho("{flow} - Repair external tables".format(flow=flow))
+            click.secho("{flow} - Repair external tables".format(flow=flow), fg="cyan")
             repair_external_tables(
                 flow=flow,
                 athena_location=config["S3__ATHENA_LOCATION"],
